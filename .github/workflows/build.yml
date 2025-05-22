@@ -1,0 +1,41 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - '*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.24.3'
+
+      - name: Build
+        run: |
+          mkdir ~/build
+          git clone https://github.com/muety/wakapi --branch ${{ github.ref_name }} --depth 1
+          cd wakapi
+          GOARCH=amd64 go build -o ~/build/wakapi-${{ github.ref_name }}-linux-amd64
+          GOARCH=arm64 go build -o ~/build/wakapi-${{ github.ref_name }}-linux-arm64
+          GOARCH=riscv64 go build -o ~/build/wakapi-${{ github.ref_name }}-linux-riscv64
+          cd ~/build
+          zstd *
+          sha256sum *.zst > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run:
+          gh release -R ${{ github.repository }} create -F README.md ${{ github.ref_name }} -t ${{ github.ref_name }} ~/build/SHA256SUMS.txt ~/build/*zst
